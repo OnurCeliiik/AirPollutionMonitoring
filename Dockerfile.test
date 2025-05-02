@@ -1,0 +1,14 @@
+FROM alpine:latest
+
+RUN apk add --no-cache bash curl bc jq
+
+WORKDIR /scripts
+
+COPY scripts/manual-input.sh .
+COPY scripts/auto-test.sh .
+
+RUN chmod +x manual-input.sh auto-test.sh
+
+ENV API_HOST="http://ingest:8080"
+
+ENTRYPOINT ["bash"] 
