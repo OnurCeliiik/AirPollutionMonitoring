@@ -32,10 +32,7 @@ air-quality-platform/
 └── README.md                 # You are here
 ```
 
-## Prerequisites
 
-- Docker and Docker Compose
-- [Optional] Mapbox account for map visualization (get a free token at https://mapbox.com)
 
 ## Quick Start
 
