@@ -1,180 +1,135 @@
-# Real-Time Air Quality Monitoring Platform
+# Air Quality Monitoring Platform
 
-This is a backend system for monitoring air pollution in real-time. It receives environmental data, processes it asynchronously, performs anomaly detection, and exposes data through RESTful APIs and WebSockets.
+A comprehensive platform for real-time air quality monitoring, with microservice architecture and React frontend.
 
-## Architecture
+## Project Structure
 
 ```
-┌─────────────┐     HTTP     ┌──────────────┐      ┌────────────┐
-│ Data Sources│────POST─────►│ Ingest Service│────►│            │
-└─────────────┘              └──────────────┘      │            │
-                                   │               │   Kafka    │
-                                   │               │            │
-                                   ▼               │            │
-┌─────────────┐               ┌──────────────┐     │            │
-│  WebSocket  │◄──────────────┤Notifier Service◄───┤            │
-│   Clients   │  Alerts       └──────────────┘     └────────────┘
-└─────────────┘                     ▲                     ▲
-                                    │                     │
-                                    │                     │
-                                    │               ┌──────────────┐
-                                    └───────────────┤ Processor    │
-                                                    │   Service    │
-                                                    └──────────────┘
-                                                          │
-                                                          │
-                                                          ▼
-                                                    ┌────────────┐
-                                                    │TimescaleDB │
-                                                    └────────────┘
+air-quality-platform/
+├── backend/
+│   ├── cmd/                  # Entry points for each microservice
+│   │   ├── ingest/           # Ingest API service
+│   │   ├── processor/        # Data processor service
+│   │   └── notifier/         # Notifier WebSocket service
+│   ├── build/                # Docker build files for each service
+│   │   ├── ingest/           # Dockerfile for ingest service
+│   │   ├── processor/        # Dockerfile for processor service
+│   │   └── notifier/         # Dockerfile for notifier service
+│   ├── db/                   # Database scripts and migrations
+│   │   └── init/             # Initial schema setup
+│   └── docker-compose.yml    # Backend service definitions
+├── frontend/
+│   ├── src/
+│   │   ├── components/       # Reusable UI components
+│   │   ├── pages/            # Page components 
+│   │   ├── hooks/            # Custom React hooks
+│   │   ├── services/         # API service functions
+│   │   └── utils/            # Utility functions
+│   ├── public/               # Static assets
+│   ├── Dockerfile            # Frontend Docker configuration
+│   └── nginx.conf            # Nginx configuration for the frontend
+├── docker-compose.yml        # Root compose file that combines frontend and backend
+└── README.md                 # You are here
 ```
 
-The platform consists of three microservices:
-
-1. **API Gateway / Ingest Service** - Accepts pollution data from scripts or UI and publishes raw data to Kafka.
-2. **Data Processor Service** - Subscribes to raw air data, validates, detects anomalies, and inserts data into TimescaleDB.
-3. **Anomaly Notifier Service** - Subscribes to anomaly alerts, stores anomalies in DB, and sends WebSocket notifications to frontend clients.
-
-## Tech Stack
-
-- **Language**: Go
-- **Architecture**: Microservices
-- **Message Queue**: Apache Kafka (for async communication)
-- **Database**: TimescaleDB (time-series PostgreSQL)
-- **Containerization**: Docker
-- **API Documentation**: Swagger (via swaggo/gin-swagger)
-- **WebSocket**: For real-time anomaly alerts
-
-## Getting Started
-
-### Prerequisites
+## Prerequisites
 
 - Docker and Docker Compose
-- Go 1.21 or higher (for local development)
-- Bash (for running test scripts)
+- [Optional] Mapbox account for map visualization (get a free token at https://mapbox.com)
 
-### Running with Docker
-
-From the root project directory:
+## Quick Start
 
 ```bash
+# Build and run all services
 docker-compose up --build
+
+# Access:
+# - Frontend: http://localhost:80
+# - Ingest API: http://localhost:8080
+# - Notifier API: http://localhost:8081
 ```
 
-This will start all services including TimescaleDB, Kafka, and the three microservices.
+## Testing the Application
 
-### API Endpoints
+1. **Send test data to the ingest API**:
 
-#### Ingest Service (port 8080)
-
-- `POST /api/data` - Submit air quality data
-  ```json
-  {
+```bash
+curl -X POST http://localhost:8080/api/data \
+  -H "Content-Type: application/json" \
+  -d '{
     "latitude": 41.015,
     "longitude": 28.979,
     "parameter": "PM2.5",
     "value": 90.0,
-    "timestamp": "2025-05-02T13:45:00Z"
-  }
-  ```
-- `GET /health` - Health check endpoint
-- `GET /swagger/index.html` - Swagger UI for API documentation
+    "timestamp": "2023-05-02T13:45:00Z"
+  }'
+```
 
-#### Notifier Service (port 8081)
-
-- `GET /api/anomalies` - Get recent anomalies
-- `GET /health` - Health check endpoint
-- `WS /ws/alerts` - WebSocket endpoint for real-time anomaly alerts
-
-### Testing
-
-#### Running Tests
+2. **Check recent anomalies**:
 
 ```bash
-# Run unit tests
+curl http://localhost:8081/api/anomalies
+```
+
+3. **View any anomalies in the frontend anomaly panel**
+
+## Architecture
+
+- **Frontend**: React.js with Mapbox for visualization
+- **Backend**: Go microservices
+  - **Ingest Service**: Receives air quality data via REST API
+  - **Processor Service**: Analyzes data for anomalies
+  - **Notifier Service**: Provides WebSocket real-time updates
+- **Data Flow**: REST API → Kafka → TimescaleDB → WebSocket
+
+## Features
+
+### Backend Services
+
+- **Ingest Service**: Accepts incoming air quality data from sensors
+- **Processor Service**: Internal service for anomaly detection 
+- **Notifier Service**: Provides WebSocket connections and historical anomaly data
+
+### Frontend Features
+
+- **Air Quality Map or Table**: Shows air pollution levels on a world map or in a table view
+- **Historical Charts**: Line charts showing time-series data for a selected region
+- **Real-time Alerts**: Displays alerts when anomalies are detected via WebSocket
+- **Region Details**: Provides detailed stats when a region is selected
+
+## Development
+
+### Running Individual Services
+
+To run the backend services only:
+```
 cd backend
-go test ./...
-
-# Run integration tests (requires running services)
-go test -tags=integration ./...
+docker-compose up
 ```
 
-#### Using Test Scripts
-
-You can test the platform using the provided scripts in a Docker container:
-
-```bash
-# Run manual input test
-docker-compose run test ./manual-input.sh 41.015 28.979 "PM2.5" 90.0
-
-# Run automated test
-docker-compose run test ./auto-test.sh --duration=60 --rate=10 --anomaly-chance=20
+To run the frontend in development mode:
+```
+cd frontend
+npm install
+npm start
 ```
 
-Parameters for auto-test.sh:
-- `duration`: Test duration in seconds (default: 60)
-- `rate`: Requests per minute (default: 10)
-- `anomaly-chance`: Percentage chance of generating anomalous values (default: 20)
+## Technologies Used
 
-## Database Schema
-
-### TimescaleDB Tables
-
-#### air_quality_data
-| Column     | Type       |
-|------------|------------|
-| id         | UUID       |
-| latitude   | FLOAT      |
-| longitude  | FLOAT      |
-| parameter  | TEXT       |
-| value      | FLOAT      |
-| timestamp  | TIMESTAMPTZ|
-
-#### anomalies
-| Column     | Type       |
-|------------|------------|
-| id         | UUID       |
-| type       | TEXT       |
-| parameter  | TEXT       |
-| value      | FLOAT      |
-| latitude   | FLOAT      |
-| longitude  | FLOAT      |
-| detected_at| TIMESTAMPTZ|
-
-## Anomaly Detection Logic
-
-The platform applies one or more of the following anomaly detection methods:
-
-1. **Thresholds** - Compares values against WHO limits (e.g., PM2.5 > 15 μg/m³)
-2. **Z-score / Statistical Outliers** - Identifies values that are statistically significant outliers
-3. **Spike Detection** - Identifies sudden increases (>50% higher than 24h average)
-4. **Geographic Inconsistency** - Identifies values that differ significantly from nearby readings
+- **Backend**: Go with microservices architecture
+- **Frontend**: React.js, Mapbox GL JS, Chart.js
+- **Communication**: RESTful APIs, WebSockets
+- **Data Storage**: TimescaleDB (PostgreSQL for time-series data)
+- **Message Queue**: Kafka
+- **Containerization**: Docker, Docker Compose
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### Kafka Not Starting
-- Verify Zookeeper is running properly: `docker-compose logs zookeeper`
-- Check Kafka logs: `docker-compose logs kafka`
-- Ensure ports 9092 and 2181 are not in use by other applications
-
-#### TimescaleDB Issues
-- Verify the database is running: `docker-compose logs timescaledb`
-- Check connection string in service environment variables
-- Ensure port 5432 is not in use by another PostgreSQL instance
-
-#### Services Failing to Start
-- Check that all services can connect to Kafka: `docker-compose logs ingest`
-- Verify TimescaleDB is healthy: `docker-compose exec timescaledb pg_isready`
-- Check service health endpoints: `curl http://localhost:8080/health`
-
-### Resetting the System
-To completely reset the system and start fresh:
-```bash
-docker-compose down -v
-docker-compose up --build
-```
+- **Missing Mapbox Token**: The frontend will show a table view instead of a map
+- **Connection Refused Errors**: Make sure all services are running by checking `docker-compose ps`
+- **Empty Data**: Send some test data using the curl commands above
 
 ## License
 

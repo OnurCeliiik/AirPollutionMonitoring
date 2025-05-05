@@ -41,12 +41,13 @@ func (db *DB) InitSchema() error {
 	// Create air_quality_data table
 	_, err := db.pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS air_quality_data (
-			id UUID PRIMARY KEY,
+			id UUID,
 			latitude FLOAT NOT NULL,
 			longitude FLOAT NOT NULL,
 			parameter TEXT NOT NULL,
 			value FLOAT NOT NULL,
-			timestamp TIMESTAMPTZ NOT NULL
+			timestamp TIMESTAMPTZ NOT NULL,
+			PRIMARY KEY (id, timestamp)
 		);
 	`)
 	if err != nil {
@@ -64,13 +65,17 @@ func (db *DB) InitSchema() error {
 	// Create anomalies table
 	_, err = db.pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS anomalies (
-			id UUID PRIMARY KEY,
+			id UUID,
 			type TEXT NOT NULL,
 			parameter TEXT NOT NULL,
 			value FLOAT NOT NULL,
 			latitude FLOAT NOT NULL,
 			longitude FLOAT NOT NULL,
-			detected_at TIMESTAMPTZ NOT NULL
+			detected_at TIMESTAMPTZ NOT NULL,
+			air_quality_data_id UUID,
+			air_quality_data_timestamp TIMESTAMPTZ,
+			FOREIGN KEY (air_quality_data_id, air_quality_data_timestamp) REFERENCES air_quality_data(id, timestamp),
+			PRIMARY KEY (id, detected_at)
 		);
 	`)
 	if err != nil {
@@ -108,9 +113,9 @@ func (db *DB) InsertAnomaly(anomaly *models.Anomaly) error {
 	defer cancel()
 
 	_, err := db.pool.Exec(ctx, `
-		INSERT INTO anomalies (id, type, parameter, value, latitude, longitude, detected_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, anomaly.ID, anomaly.Type, anomaly.Parameter, anomaly.Value, anomaly.Latitude, anomaly.Longitude, anomaly.DetectedAt)
+		INSERT INTO anomalies (id, type, parameter, value, latitude, longitude, detected_at, air_quality_data_id, air_quality_data_timestamp)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	`, anomaly.ID, anomaly.Type, anomaly.Parameter, anomaly.Value, anomaly.Latitude, anomaly.Longitude, anomaly.DetectedAt, anomaly.AirQualityDataID, anomaly.AirQualityDataTimestamp)
 
 	if err != nil {
 		return fmt.Errorf("failed to insert anomaly: %w", err)
@@ -165,7 +170,7 @@ func (db *DB) GetRecentAnomalies(hours int) ([]models.Anomaly, error) {
 	defer cancel()
 
 	rows, err := db.pool.Query(ctx, `
-		SELECT id, type, parameter, value, latitude, longitude, detected_at
+		SELECT id, type, parameter, value, latitude, longitude, detected_at, air_quality_data_id, air_quality_data_timestamp
 		FROM anomalies
 		WHERE detected_at > NOW() - INTERVAL '$1 hours'
 		ORDER BY detected_at DESC
@@ -180,7 +185,8 @@ func (db *DB) GetRecentAnomalies(hours int) ([]models.Anomaly, error) {
 	for rows.Next() {
 		var anomaly models.Anomaly
 		if err := rows.Scan(&anomaly.ID, &anomaly.Type, &anomaly.Parameter, &anomaly.Value,
-			&anomaly.Latitude, &anomaly.Longitude, &anomaly.DetectedAt); err != nil {
+			&anomaly.Latitude, &anomaly.Longitude, &anomaly.DetectedAt,
+			&anomaly.AirQualityDataID, &anomaly.AirQualityDataTimestamp); err != nil {
 			return nil, err
 		}
 		results = append(results, anomaly)

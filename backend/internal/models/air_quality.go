@@ -18,13 +18,15 @@ type AirQualityData struct {
 
 // Anomaly represents an anomaly in air quality data
 type Anomaly struct {
-	ID         uuid.UUID `json:"id" db:"id"`
-	Type       string    `json:"type" db:"type"`
-	Parameter  string    `json:"parameter" db:"parameter"`
-	Value      float64   `json:"value" db:"value"`
-	Latitude   float64   `json:"latitude" db:"latitude"`
-	Longitude  float64   `json:"longitude" db:"longitude"`
-	DetectedAt time.Time `json:"detected_at" db:"detected_at"`
+	ID                      uuid.UUID `json:"id" db:"id"`
+	Type                    string    `json:"type" db:"type"`
+	Parameter               string    `json:"parameter" db:"parameter"`
+	Value                   float64   `json:"value" db:"value"`
+	Latitude                float64   `json:"latitude" db:"latitude"`
+	Longitude               float64   `json:"longitude" db:"longitude"`
+	DetectedAt              time.Time `json:"detected_at" db:"detected_at"`
+	AirQualityDataID        uuid.UUID `json:"air_quality_data_id,omitempty" db:"air_quality_data_id"`
+	AirQualityDataTimestamp time.Time `json:"air_quality_data_timestamp,omitempty" db:"air_quality_data_timestamp"`
 }
 
 // AnomalyType represents the type of anomaly detected
@@ -68,6 +70,22 @@ func NewAnomaly(anomalyType string, parameter string, value, latitude, longitude
 		Latitude:   latitude,
 		Longitude:  longitude,
 		DetectedAt: time.Now(),
+		// AirQualityDataID and AirQualityDataTimestamp are optional and can be set later
+	}
+}
+
+// NewAnomalyFromData creates a new anomaly from air quality data
+func NewAnomalyFromData(anomalyType string, data *AirQualityData) *Anomaly {
+	return &Anomaly{
+		ID:                      uuid.New(),
+		Type:                    anomalyType,
+		Parameter:               data.Parameter,
+		Value:                   data.Value,
+		Latitude:                data.Latitude,
+		Longitude:               data.Longitude,
+		DetectedAt:              time.Now(),
+		AirQualityDataID:        data.ID,
+		AirQualityDataTimestamp: data.Timestamp,
 	}
 }
 

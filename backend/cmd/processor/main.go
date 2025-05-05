@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log"
+	"math"
+	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,6 +16,9 @@ import (
 )
 
 func main() {
+	// Initialize random seed for jitter calculations
+	rand.Seed(time.Now().UnixNano())
+
 	// Load configuration from environment variables
 	kafkaBrokers := getEnv("KAFKA_BROKERS", "localhost:9092")
 	dbConnStr := getEnv("DB_CONNECTION_STRING", "postgres://postgres:postgres@localhost:5432/timescaledb?sslmode=disable")
@@ -63,21 +68,36 @@ func main() {
 
 // processMessages continuously processes messages from Kafka
 func processMessages(ctx context.Context, consumer *kafka.Consumer, producer *kafka.Producer, database *db.DB, detector *anomaly.Detector) {
+	backoffTime := 1 * time.Second // Start with 1 second backoff
+	maxBackoff := 30 * time.Second // Max backoff of 30 seconds
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 			// Set a timeout for the consume operation
-			msgCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			msgCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			data, err := consumer.ConsumeAirQualityData(msgCtx)
 			cancel()
 
 			if err != nil {
 				log.Printf("Error consuming message: %v", err)
-				time.Sleep(1 * time.Second) // Wait a bit before retrying
+				// Implement exponential backoff with jitter
+				jitter := time.Duration(rand.Intn(500)) * time.Millisecond
+				sleepTime := backoffTime + jitter
+				time.Sleep(sleepTime)
+
+				// Increase backoff time for next attempt, with a maximum limit
+				backoffTime = time.Duration(math.Min(
+					float64(backoffTime*2),
+					float64(maxBackoff),
+				))
 				continue
 			}
+
+			// Reset backoff time on successful message consumption
+			backoffTime = 1 * time.Second
 
 			log.Printf("Processing air quality data: %s at [%f,%f]: %f",
 				data.Parameter, data.Latitude, data.Longitude, data.Value)

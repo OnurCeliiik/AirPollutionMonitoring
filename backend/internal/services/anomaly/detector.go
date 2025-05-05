@@ -80,12 +80,9 @@ func (d *Detector) checkThresholdExceeded(data *models.AirQualityData) *models.A
 	}
 
 	if data.Value > limit {
-		return models.NewAnomaly(
+		return models.NewAnomalyFromData(
 			string(models.ThresholdExceeded),
-			data.Parameter,
-			data.Value,
-			data.Latitude,
-			data.Longitude,
+			data,
 		)
 	}
 
@@ -124,12 +121,9 @@ func (d *Detector) checkStatisticalOutlier(data *models.AirQualityData, recentDa
 
 	// If Z-score is greater than 3, it's an outlier (99.7% confidence)
 	if math.Abs(zScore) > 3.0 {
-		return models.NewAnomaly(
+		return models.NewAnomalyFromData(
 			string(models.StatisticalOutlier),
-			data.Parameter,
-			data.Value,
-			data.Latitude,
-			data.Longitude,
+			data,
 		)
 	}
 
@@ -156,12 +150,9 @@ func (d *Detector) checkSpikeDetection(data *models.AirQualityData, recentData [
 
 	// Check if current value is 50% higher than the average
 	if data.Value > avg*1.5 {
-		return models.NewAnomaly(
+		return models.NewAnomalyFromData(
 			string(models.SpikeDetected),
-			data.Parameter,
-			data.Value,
-			data.Latitude,
-			data.Longitude,
+			data,
 		)
 	}
 
@@ -211,12 +202,9 @@ func (d *Detector) checkGeographicInconsistency(data *models.AirQualityData, rec
 
 	// Check if current value is significantly different (>3x) from median
 	if data.Value > median*3 || (median > 0 && data.Value*3 < median) {
-		return models.NewAnomaly(
+		return models.NewAnomalyFromData(
 			string(models.GeographicInconsistency),
-			data.Parameter,
-			data.Value,
-			data.Latitude,
-			data.Longitude,
+			data,
 		)
 	}
 

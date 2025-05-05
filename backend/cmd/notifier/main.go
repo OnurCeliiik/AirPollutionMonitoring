@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log"
+	"math"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,6 +18,9 @@ import (
 )
 
 func main() {
+	// Initialize random seed for jitter calculations
+	rand.Seed(time.Now().UnixNano())
+
 	// Load configuration from environment variables
 	kafkaBrokers := getEnv("KAFKA_BROKERS", "localhost:9092")
 	dbConnStr := getEnv("DB_CONNECTION_STRING", "postgres://postgres:postgres@localhost:5432/timescaledb?sslmode=disable")
@@ -133,21 +138,36 @@ func main() {
 
 // processAnomalyAlerts continuously processes anomaly alerts from Kafka
 func processAnomalyAlerts(ctx context.Context, consumer *kafka.Consumer, hub *websocket.Hub) {
+	backoffTime := 1 * time.Second // Start with 1 second backoff
+	maxBackoff := 30 * time.Second // Max backoff of 30 seconds
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 			// Set a timeout for the consume operation
-			msgCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			msgCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			anomaly, err := consumer.ConsumeAnomaly(msgCtx)
 			cancel()
 
 			if err != nil {
 				log.Printf("Error consuming anomaly message: %v", err)
-				time.Sleep(1 * time.Second) // Wait a bit before retrying
+				// Implement exponential backoff with jitter
+				jitter := time.Duration(rand.Intn(500)) * time.Millisecond
+				sleepTime := backoffTime + jitter
+				time.Sleep(sleepTime)
+
+				// Increase backoff time for next attempt, with a maximum limit
+				backoffTime = time.Duration(math.Min(
+					float64(backoffTime*2),
+					float64(maxBackoff),
+				))
 				continue
 			}
+
+			// Reset backoff time on successful message consumption
+			backoffTime = 1 * time.Second
 
 			log.Printf("Received anomaly alert: %s - %s - %f",
 				anomaly.Type, anomaly.Parameter, anomaly.Value)
